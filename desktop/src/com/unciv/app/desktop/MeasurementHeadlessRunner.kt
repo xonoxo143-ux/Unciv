@@ -22,6 +22,9 @@ import com.unciv.models.skins.SkinCache
 import com.unciv.models.tilesets.TileSetCache
 import com.unciv.utils.Log
 import java.io.File
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 import kotlin.time.ExperimentalTime
 
@@ -50,28 +53,68 @@ internal object MeasurementHeadlessRunner {
         TileSetCache.loadTileSetConfigs(true)
         SkinCache.loadSkinConfigs(true)
 
-        val results = runGames(config)
-        MeasurementResultWriter(config).write(results)
+        val writer = MeasurementResultWriter(config)
+        writer.reset()
+        val results = runGames(config, writer)
+        writer.writeReport(results)
         println("Measurement complete: ${results.size} games -> ${config.outputDir}")
-        exitProcess(if (results.any { it.crashed }) 1 else 0)
+
+        val hasBadResult = results.any { it.crashed || it.timedOut }
+        exitProcess(if (hasBadResult) 1 else 0)
     }
 
-    private fun runGames(config: MeasurementConfig): List<MeasuredGame> {
-        val measuredGames = ArrayList<MeasuredGame>()
+    private fun runGames(config: MeasurementConfig, writer: MeasurementResultWriter): List<MeasuredGame> {
+        val measuredGames = Collections.synchronizedList(ArrayList<MeasuredGame>())
         val outputDir = File(config.outputDir)
         outputDir.mkdirs()
 
         repeat(config.games) { index ->
             val seed = config.seedStart + index
             val startedAt = System.currentTimeMillis()
+            val completed = AtomicBoolean(false)
+
+            if (config.perGameTimeoutSeconds > 0) {
+                thread(
+                    start = true,
+                    isDaemon = true,
+                    name = "measurement-watchdog-$seed"
+                ) {
+                    Thread.sleep(config.perGameTimeoutSeconds * 1000L)
+                    if (completed.compareAndSet(false, true)) {
+                        val timedOut = MeasuredGame(
+                            index = index + 1,
+                            seed = seed,
+                            turns = -1,
+                            winner = null,
+                            victoryType = null,
+                            currentPlayer = null,
+                            durationMs = System.currentTimeMillis() - startedAt,
+                            crashed = false,
+                            timedOut = true,
+                            crashMessage = "Timed out after ${config.perGameTimeoutSeconds} seconds"
+                        )
+                        measuredGames += timedOut
+                        writer.writeIncremental(timedOut)
+                        writer.writeReport(measuredGames.toList())
+                        println("${timedOut.index}/${config.games} seed=$seed timed out after ${config.perGameTimeoutSeconds}s; partial results written to ${config.outputDir}")
+                        exitProcess(124)
+                    }
+                }
+            }
+
             val result = runOneGame(seed, config)
             val durationMs = System.currentTimeMillis() - startedAt
             val measured = result.copy(index = index + 1, durationMs = durationMs)
-            measuredGames += measured
-            println("${measured.index}/${config.games} seed=$seed winner=${measured.winner ?: "DRAW"} victory=${measured.victoryType ?: "none"} turns=${measured.turns} durationMs=$durationMs")
+
+            if (completed.compareAndSet(false, true)) {
+                measuredGames += measured
+                writer.writeIncremental(measured)
+                writer.writeReport(measuredGames.toList())
+                println("${measured.index}/${config.games} seed=$seed status=${measured.status()} winner=${measured.winner ?: "DRAW"} victory=${measured.victoryType ?: "none"} turns=${measured.turns} durationMs=$durationMs")
+            }
         }
 
-        return measuredGames
+        return measuredGames.toList()
     }
 
     private fun runOneGame(seed: Int, config: MeasurementConfig): MeasuredGame {
@@ -112,6 +155,7 @@ internal object MeasurementHeadlessRunner {
                 victoryType = step.victoryType,
                 currentPlayer = step.currentPlayer,
                 crashed = false,
+                timedOut = false,
                 crashMessage = null
             )
         } catch (throwable: Throwable) {
@@ -122,6 +166,7 @@ internal object MeasurementHeadlessRunner {
                 victoryType = null,
                 currentPlayer = null,
                 crashed = true,
+                timedOut = false,
                 crashMessage = throwable.stackTraceToString()
             )
         }
@@ -167,7 +212,8 @@ private data class MeasurementConfig(
     val maxTurns: Int = 500,
     val seedStart: Int = 42017,
     val outputDir: String = "measurement-results",
-    val statTurns: List<Int> = listOf(50, 100, 150, 200)
+    val statTurns: List<Int> = listOf(50, 100, 150, 200),
+    val perGameTimeoutSeconds: Int = 120
 ) {
     companion object {
         fun fromArgs(args: Array<String>): MeasurementConfig {
@@ -176,11 +222,13 @@ private data class MeasurementConfig(
                 .associate { it[0].removePrefix("--") to it[1] }
 
             val fileConfig = argMap["config"]?.let { fromFile(File(it)) } ?: MeasurementConfig()
+            val explicitSeed = argMap["seed"]?.toIntOrNull()
             return fileConfig.copy(
-                games = argMap["games"]?.toIntOrNull() ?: fileConfig.games,
+                games = if (explicitSeed != null) 1 else argMap["games"]?.toIntOrNull() ?: fileConfig.games,
                 maxTurns = argMap["max-turns"]?.toIntOrNull() ?: fileConfig.maxTurns,
-                seedStart = argMap["seed-start"]?.toIntOrNull() ?: fileConfig.seedStart,
-                outputDir = argMap["output"] ?: fileConfig.outputDir
+                seedStart = explicitSeed ?: argMap["seed-start"]?.toIntOrNull() ?: fileConfig.seedStart,
+                outputDir = argMap["output"] ?: fileConfig.outputDir,
+                perGameTimeoutSeconds = argMap["per-game-timeout-seconds"]?.toIntOrNull() ?: fileConfig.perGameTimeoutSeconds
             )
         }
 
@@ -192,7 +240,8 @@ private data class MeasurementConfig(
                 maxTurns = intField(text, "maxTurns") ?: 500,
                 seedStart = intField(text, "seedStart") ?: 42017,
                 outputDir = stringField(text, "outputDir") ?: "measurement-results",
-                statTurns = intListField(text, "statTurns") ?: listOf(50, 100, 150, 200)
+                statTurns = intListField(text, "statTurns") ?: listOf(50, 100, 150, 200),
+                perGameTimeoutSeconds = intField(text, "perGameTimeoutSeconds") ?: 120
             )
         }
 
@@ -218,72 +267,49 @@ private data class MeasuredGame(
     val currentPlayer: String?,
     val durationMs: Long = 0,
     val crashed: Boolean,
+    val timedOut: Boolean,
     val crashMessage: String?
-)
+) {
+    fun status(): String = when {
+        timedOut -> "timeout"
+        crashed -> "crash"
+        winner == null -> "draw"
+        else -> "completed"
+    }
+}
 
 private class MeasurementResultWriter(private val config: MeasurementConfig) {
     private val outputDir = File(config.outputDir)
+    private val summaryFile = File(outputDir, "summary.csv")
+    private val gamesFile = File(outputDir, "games.jsonl")
+    private val crashesFile = File(outputDir, "crashes.jsonl")
+    private val reportFile = File(outputDir, "report.md")
 
-    fun write(results: List<MeasuredGame>) {
+    @Synchronized
+    fun reset() {
         outputDir.mkdirs()
-        writeSummaryCsv(results)
-        writeGamesJsonl(results)
-        writeCrashLog(results)
-        writeReport(results)
+        summaryFile.writeText("index,seed,status,winner,victory_type,turns,duration_ms,crashed,timed_out\n")
+        gamesFile.writeText("")
+        crashesFile.writeText("")
+        reportFile.writeText("# Unciv Headless Measurement Report\n\nRun started. Results are written after each seed.\n")
     }
 
-    private fun writeSummaryCsv(results: List<MeasuredGame>) {
-        val lines = ArrayList<String>()
-        lines += "index,seed,winner,victory_type,turns,duration_ms,crashed"
-        for (result in results) {
-            lines += listOf(
-                result.index.toString(),
-                result.seed.toString(),
-                csv(result.winner ?: "DRAW"),
-                csv(result.victoryType ?: ""),
-                result.turns.toString(),
-                result.durationMs.toString(),
-                result.crashed.toString()
-            ).joinToString(",")
-        }
-        File(outputDir, "summary.csv").writeText(lines.joinToString("\n") + "\n")
+    @Synchronized
+    fun writeIncremental(result: MeasuredGame) {
+        summaryFile.appendText(summaryRow(result) + "\n")
+        gamesFile.appendText(gameJson(result) + "\n")
+        if (result.crashed || result.timedOut) crashesFile.appendText(crashJson(result) + "\n")
     }
 
-    private fun writeGamesJsonl(results: List<MeasuredGame>) {
-        File(outputDir, "games.jsonl").writeText(
-            results.joinToString("\n") { result ->
-                "{" + listOf(
-                    json("index", result.index),
-                    json("seed", result.seed),
-                    json("winner", result.winner),
-                    json("victoryType", result.victoryType),
-                    json("turns", result.turns),
-                    json("durationMs", result.durationMs),
-                    json("crashed", result.crashed)
-                ).joinToString(",") + "}"
-            } + "\n"
-        )
-    }
-
-    private fun writeCrashLog(results: List<MeasuredGame>) {
-        File(outputDir, "crashes.jsonl").writeText(
-            results.filter { it.crashed }.joinToString("\n") { result ->
-                "{" + listOf(
-                    json("index", result.index),
-                    json("seed", result.seed),
-                    json("crashMessage", result.crashMessage)
-                ).joinToString(",") + "}"
-            } + "\n"
-        )
-    }
-
-    private fun writeReport(results: List<MeasuredGame>) {
-        val completed = results.count { !it.crashed }
+    @Synchronized
+    fun writeReport(results: List<MeasuredGame>) {
+        val completed = results.count { !it.crashed && !it.timedOut }
         val crashes = results.count { it.crashed }
-        val draws = results.count { !it.crashed && it.winner == null }
-        val winners = results.filter { !it.crashed && it.winner != null }.groupingBy { it.winner!! }.eachCount()
-        val averageTurns = results.filter { !it.crashed && it.turns >= 0 }.map { it.turns }.average()
-        val averageDuration = results.filter { !it.crashed }.map { it.durationMs }.average()
+        val timeouts = results.count { it.timedOut }
+        val draws = results.count { !it.crashed && !it.timedOut && it.winner == null }
+        val winners = results.filter { !it.crashed && !it.timedOut && it.winner != null }.groupingBy { it.winner!! }.eachCount()
+        val averageTurns = results.filter { !it.crashed && !it.timedOut && it.turns >= 0 }.map { it.turns }.average()
+        val averageDuration = results.filter { !it.crashed && !it.timedOut }.map { it.durationMs }.average()
 
         val text = buildString {
             appendLine("# Unciv Headless Measurement Report")
@@ -294,11 +320,14 @@ private class MeasurementResultWriter(private val config: MeasurementConfig) {
             appendLine("- Max turns: ${config.maxTurns}")
             appendLine("- Seed start: ${config.seedStart}")
             appendLine("- Stat turns: ${config.statTurns.joinToString()}")
+            appendLine("- Per-game timeout seconds: ${config.perGameTimeoutSeconds}")
             appendLine()
             appendLine("## Results")
             appendLine()
-            appendLine("- Completed: $completed")
+            appendLine("- Rows written: ${results.size}")
+            appendLine("- Completed/draw rows: $completed")
             appendLine("- Crashes: $crashes")
+            appendLine("- Timeouts: $timeouts")
             appendLine("- Draws: $draws")
             appendLine("- Average turns: ${if (averageTurns.isNaN()) "n/a" else String.format("%.1f", averageTurns)}")
             appendLine("- Average duration ms: ${if (averageDuration.isNaN()) "n/a" else String.format("%.1f", averageDuration)}")
@@ -315,8 +344,39 @@ private class MeasurementResultWriter(private val config: MeasurementConfig) {
             appendLine("- crashes.jsonl")
         }
 
-        File(outputDir, "report.md").writeText(text)
+        reportFile.writeText(text)
     }
+
+    private fun summaryRow(result: MeasuredGame): String = listOf(
+        result.index.toString(),
+        result.seed.toString(),
+        csv(result.status()),
+        csv(result.winner ?: "DRAW"),
+        csv(result.victoryType ?: ""),
+        result.turns.toString(),
+        result.durationMs.toString(),
+        result.crashed.toString(),
+        result.timedOut.toString()
+    ).joinToString(",")
+
+    private fun gameJson(result: MeasuredGame): String = "{" + listOf(
+        json("index", result.index),
+        json("seed", result.seed),
+        json("status", result.status()),
+        json("winner", result.winner),
+        json("victoryType", result.victoryType),
+        json("turns", result.turns),
+        json("durationMs", result.durationMs),
+        json("crashed", result.crashed),
+        json("timedOut", result.timedOut)
+    ).joinToString(",") + "}"
+
+    private fun crashJson(result: MeasuredGame): String = "{" + listOf(
+        json("index", result.index),
+        json("seed", result.seed),
+        json("status", result.status()),
+        json("crashMessage", result.crashMessage)
+    ).joinToString(",") + "}"
 
     private fun csv(value: String): String = "\"${value.replace("\"", "\"\"")}\""
 
