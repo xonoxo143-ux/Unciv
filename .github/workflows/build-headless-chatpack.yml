@@ -2,6 +2,9 @@ name: Build Headless Chat Pack
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - headless-measurement-harness
 
 jobs:
   build-headless-chatpack:
