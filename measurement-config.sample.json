@@ -1,0 +1,7 @@
+{
+  "games": 5,
+  "maxTurns": 500,
+  "seedStart": 42017,
+  "outputDir": "measurement-results",
+  "statTurns": [50, 100, 150, 200]
+}
