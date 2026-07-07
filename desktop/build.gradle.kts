@@ -163,6 +163,58 @@ for (platform in Platform.values()) {
     }
 }
 
+
+
+val headlessMainClassName = "com.unciv.app.desktop.MeasurementHeadlessRunner"
+val headlessJarName = "UncivHeadless.jar"
+
+tasks.register<JavaExec>("runHeadlessMeasurement") {
+    dependsOn(tasks.getByName("classes"))
+    mainClass.set(headlessMainClassName)
+    classpath = sourceSets.main.get().runtimeClasspath
+    workingDir = assetsDir
+    isIgnoreExitValue = true
+}
+
+tasks.register<Jar>("headlessDist") {
+    dependsOn(tasks.getByName("classes"))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from(files(sourceSets.main.get().output.resourcesDir))
+    from(files(sourceSets.main.get().output.classesDirs))
+    from({
+        (
+            configurations.runtimeClasspath.get().resolve()
+            + configurations.compileClasspath.get().resolve()
+        ).map { if (it.isDirectory) it else zipTree(it) }
+    })
+    from(files(assetsDir))
+    exclude("mods", "SaveFiles", "MultiplayerFiles", "GameSettings.json", "lasterror.txt")
+    from(files(discordDir))
+    archiveFileName.set(headlessJarName)
+
+    manifest {
+        attributes(mapOf("Main-Class" to headlessMainClassName, "Specification-Version" to BuildConfig.appVersion))
+    }
+}
+
+tasks.register<Zip>("chatHeadlessPack") {
+    dependsOn(tasks.getByName("headlessDist"))
+    archiveFileName.set("UncivHeadlessChatPack.zip")
+    destinationDirectory.set(file("$rootDir/build/chat-headless"))
+
+    from(file("$buildDir/libs/$headlessJarName"))
+    from(file("$rootDir/measurement-config.sample.json")) {
+        rename { "measurement-config.json" }
+    }
+    from(file("$rootDir/neural-overlays")) {
+        into("neural-overlays")
+    }
+    from(file("$rootDir/README_HEADLESS_CHAT.md"))
+    from(file("$rootDir/scripts/run-headless.sh"))
+    from(file("$rootDir/scripts/run-headless.bat"))
+}
+
 tasks.register<Zip>("zipLinuxFilesForJar") {
     archiveFileName.set("linuxFilesForJar.zip")
     from(file("linuxFilesForJar"))
