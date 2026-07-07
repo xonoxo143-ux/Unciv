@@ -1,0 +1,5 @@
+{
+  "name": "sample-observe",
+  "mode": "observe",
+  "description": "Placeholder overlay file for the future AI hook layer. The first headless runner can simulate baseline games without using this yet."
+}
