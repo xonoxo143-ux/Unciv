@@ -1,0 +1,30 @@
+name: Build Headless Chat Pack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-headless-chatpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build chat headless pack
+        run: ./gradlew desktop:chatHeadlessPack --no-daemon --stacktrace
+
+      - name: Upload chat headless pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: UncivHeadlessChatPack
+          path: build/chat-headless/UncivHeadlessChatPack.zip
+          retention-days: 7
