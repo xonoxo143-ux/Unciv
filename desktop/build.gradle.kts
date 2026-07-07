@@ -204,6 +204,9 @@ tasks.register<Zip>("chatHeadlessPack") {
     destinationDirectory.set(file("$rootDir/build/chat-headless"))
 
     from(file("$buildDir/libs/$headlessJarName"))
+    from(file("$assetsDir/jsons")) {
+        into("jsons")
+    }
     from(file("$rootDir/measurement-config.sample.json")) {
         rename { "measurement-config.json" }
     }
