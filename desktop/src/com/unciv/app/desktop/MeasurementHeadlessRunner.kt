@@ -22,6 +22,7 @@ import com.unciv.models.skins.SkinCache
 import com.unciv.models.tilesets.TileSetCache
 import com.unciv.utils.Log
 import java.io.File
+import kotlin.system.exitProcess
 import kotlin.time.ExperimentalTime
 
 /**
@@ -52,6 +53,7 @@ internal object MeasurementHeadlessRunner {
         val results = runGames(config)
         MeasurementResultWriter(config).write(results)
         println("Measurement complete: ${results.size} games -> ${config.outputDir}")
+        exitProcess(if (results.any { it.crashed }) 1 else 0)
     }
 
     private fun runGames(config: MeasurementConfig): List<MeasuredGame> {
@@ -144,7 +146,6 @@ internal object MeasurementHeadlessRunner {
                 add(Player(Constants.spectator, PlayerType.Human))
             }
         }
-        gameParameters.players.last().setNationTransient(ruleset)
 
         val mapParameters = MapParameters().apply {
             mapSize = MapSize.Tiny
