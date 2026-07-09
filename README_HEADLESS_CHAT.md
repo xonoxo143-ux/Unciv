@@ -11,18 +11,35 @@ java -jar UncivHeadless.jar --config measurement-config.json
 Optional command-line overrides:
 
 ```bash
-java -jar UncivHeadless.jar --games 20 --max-turns 500 --seed-start 42017 --output measurement-results
+java -jar UncivHeadless.jar --games 20 --max-turns 500 --seed-start 42017 --per-game-timeout-seconds 120 --output measurement-results
 ```
 
-For chat-safe one-seed runs:
+For one-seed runs:
 
 ```bash
 java -jar UncivHeadless.jar --seed 42017 --max-turns 500 --per-game-timeout-seconds 120 --output measurement-results/seed-42017
 ```
 
+## Process model
+
+Normal mode is now a parent/child runner:
+
+- The parent JVM does not load Unciv game state.
+- The parent starts one fresh child JVM per seed.
+- The parent enforces the per-seed timeout from outside the game process.
+- The parent merges each child result into the root output files.
+
+This avoids stale global/transient Unciv state accumulating across many games in the same JVM.
+
+Child mode is an internal implementation detail, but it can be useful for direct development:
+
+```bash
+java -jar UncivHeadless.jar --child --seed 42017 --max-turns 500 --output measurement-results/child-42017
+```
+
 ## Output behavior
 
-The runner now writes after each seed instead of waiting for the whole batch to finish. If a later seed stalls or crashes, completed seed rows should already be present on disk.
+The parent writes after each seed instead of waiting for the whole batch to finish. If a later seed stalls or crashes, completed seed rows should already be present on disk.
 
 The runner writes:
 
@@ -30,6 +47,8 @@ The runner writes:
 - `games.jsonl`
 - `crashes.jsonl`
 - `report.md`
+- `seeds/<seed>/console.log`
+- `seeds/<seed>/command.txt`
 
 `summary.csv` includes a `status` column. Possible statuses are:
 
@@ -38,6 +57,6 @@ The runner writes:
 - `crash`
 - `timeout`
 
-A per-game watchdog exits the process with code `124` on timeout after writing a timeout row and refreshing the report.
+If a seed times out, the parent kills the child process, writes a timeout row, refreshes the report, and exits the overall run with code `124`.
 
 This is the bridge artifact for letting ChatGPT run real seeded Unciv simulations after the GitHub Action builds the jar.
