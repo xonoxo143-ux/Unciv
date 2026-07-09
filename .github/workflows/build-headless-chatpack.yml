@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - headless-measurement-harness
+    paths-ignore:
+      - '.github/headless-latest-run.json'
+
+permissions:
+  contents: write
+  actions: read
 
 jobs:
   build-headless-chatpack:
@@ -12,6 +18,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -31,3 +39,32 @@ jobs:
           name: UncivHeadlessChatPack
           path: build/chat-headless/UncivHeadlessChatPack.zip
           retention-days: 7
+
+      - name: Record latest run id
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .github
+          cat > .github/headless-latest-run.json <<EOF
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "branch": "${GITHUB_REF_NAME}",
+            "sha": "${GITHUB_SHA}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": ${GITHUB_RUN_ID},
+            "run_number": ${GITHUB_RUN_NUMBER},
+            "run_attempt": ${GITHUB_RUN_ATTEMPT},
+            "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
+            "artifact_name": "UncivHeadlessChatPack",
+            "artifact_path": "build/chat-headless/UncivHeadlessChatPack.zip"
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/headless-latest-run.json
+          if git diff --cached --quiet; then
+            echo "Latest run record unchanged."
+            exit 0
+          fi
+          git commit -m "Record headless chat pack workflow run [no apk]"
+          git push
