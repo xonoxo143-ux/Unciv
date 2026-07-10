@@ -299,7 +299,7 @@ w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatPl
 > Task :desktop:classes UP-TO-DATE
 > Task :desktop:headlessDist
 > Task :desktop:chatHeadlessPack
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1783726372336.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1783726940959.json
 
 BUILD SUCCESSFUL in 3m 31s
 8 actionable tasks: 8 executed
