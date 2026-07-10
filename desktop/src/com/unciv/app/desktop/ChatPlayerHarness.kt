@@ -6,7 +6,6 @@ import com.unciv.Constants.simulationCiv2
 import com.unciv.UncivGame
 import com.unciv.logic.GameInfo
 import com.unciv.logic.GameStarter
-import com.unciv.logic.automation.city.ConstructionAutomation
 import com.unciv.logic.files.UncivFiles
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.civilization.PlayerType
@@ -14,11 +13,11 @@ import com.unciv.logic.map.MapParameters
 import com.unciv.logic.map.MapSize
 import com.unciv.logic.map.MirroringType
 import com.unciv.logic.map.mapunit.MapUnit
+import com.unciv.models.metadata.BaseRuleset
 import com.unciv.models.metadata.GameParameters
 import com.unciv.models.metadata.GameSettings
 import com.unciv.models.metadata.GameSetupInfo
 import com.unciv.models.metadata.Player
-import com.unciv.models.ruleset.IConstruction
 import com.unciv.models.ruleset.RulesetCache
 import com.unciv.models.ruleset.Speed
 import com.unciv.models.ruleset.nation.Nation
@@ -28,11 +27,10 @@ import java.io.File
 import kotlin.system.exitProcess
 
 /**
- * Experimental headless player command surface for ChatGPT-style turn play.
+ * Experimental headless player command surface for ChatGPT-style benchmark play.
  *
- * The rule is strict: commands should use action IDs emitted by legalActions().
- * Unsupported categories are listed immediately but reject without mutating the
- * game state. This gives us a broad API shape without risking silent save poison.
+ * Commands must use action IDs emitted by legalActions(). Unsupported categories
+ * are listed immediately but reject without mutating the game state.
  */
 internal object ChatPlayerHarness {
     @JvmStatic
@@ -78,7 +76,7 @@ internal object ChatPlayerHarness {
     }
 
     private fun createGameSetup(seed: Int): GameSetupInfo {
-        val ruleset = RulesetCache[GameParameters().baseRuleset] ?: RulesetCache.getVanillaRuleset()
+        val ruleset = RulesetCache[BaseRuleset.Civ_V_GnK.fullName]!!
 
         val chatNation = Nation().apply { name = simulationCiv1 }
         ruleset.nations[simulationCiv1] = chatNation
@@ -129,8 +127,6 @@ internal object ChatPlayerHarness {
         return runCatching {
             when {
                 actionId.startsWith("research:") -> applyResearch(gameInfo.currentPlayerCiv, actionId.removePrefix("research:"))
-                actionId.startsWith("construction:") -> applyConstruction(gameInfo.currentPlayerCiv, actionId)
-                actionId == "automate:economy" -> applyEconomyAutomation(gameInfo.currentPlayerCiv)
                 actionId == "endTurn" -> {
                     gameInfo.nextTurn()
                     "Ended turn and advanced to ${gameInfo.currentPlayer} on turn ${gameInfo.turns}"
@@ -150,60 +146,23 @@ internal object ChatPlayerHarness {
         return "Research set to $techName"
     }
 
-    private fun applyConstruction(civ: Civilization, actionId: String): String {
-        val parts = actionId.split(":", limit = 3)
-        if (parts.size != 3) return "Rejected: malformed construction action ID"
-        val cityId = parts[1]
-        val constructionName = parts[2]
-        val city = civ.cities.firstOrNull { cityToken(it) == cityId }
-            ?: return "Rejected: city $cityId not found"
-        val construction = constructionByName(city, constructionName)
-            ?: return "Rejected: construction $constructionName not found"
-        if (!construction.isBuildable(city.cityConstructions)) return "Rejected: $constructionName is not buildable in ${city.name}"
-        city.cityConstructions.setCurrentConstruction(constructionName)
-        return "${city.name} construction set to $constructionName"
-    }
-
-    private fun applyEconomyAutomation(civ: Civilization): String {
-        var changed = 0
-        for (city in civ.cities) {
-            val before = runCatching { city.cityConstructions.currentConstructionName() }.getOrNull()
-            ConstructionAutomation(city.cityConstructions).chooseNextConstruction()
-            val after = runCatching { city.cityConstructions.currentConstructionName() }.getOrNull()
-            if (before != after) changed++
-        }
-        return "Applied safe economy automation to ${civ.cities.size} cities; changed $changed construction queues"
-    }
-
     private fun legalActions(gameInfo: GameInfo): List<ChatLegalAction> {
         val civ = gameInfo.currentPlayerCiv
         val actions = ArrayList<ChatLegalAction>()
 
         for (tech in gameInfo.ruleset.technologies.values.sortedBy { it.name }) {
             if (civ.tech.canBeResearched(tech.name)) {
-                actions += ChatLegalAction(
-                    actionId = "research:${tech.name}",
-                    category = "research",
-                    label = "Research ${tech.name}",
-                    supported = true
-                )
+                actions += ChatLegalAction("research:${tech.name}", "research", "Research ${tech.name}", true)
             }
         }
 
         for (city in civ.cities.sortedBy { it.name }) {
-            val cityId = cityToken(city)
-            for (construction in buildableConstructions(city).sortedBy { it.name }) {
-                actions += ChatLegalAction(
-                    actionId = "construction:$cityId:${construction.name}",
-                    category = "cityConstruction",
-                    label = "${city.name}: build ${construction.name}",
-                    supported = true
-                )
-            }
-        }
-
-        if (civ.cities.isNotEmpty()) {
-            actions += ChatLegalAction("automate:economy", "automation", "Let built-in AI handle city/economy choices once", true)
+            actions += ChatLegalAction(
+                "construction:${cityToken(city)}:list",
+                "cityConstruction",
+                "${city.name}: construction category present but executor not enabled yet",
+                false
+            )
         }
 
         for (unit in civ.units.getCivUnits().sortedWith(compareBy<MapUnit> { it.id }.thenBy { it.name })) {
@@ -211,6 +170,7 @@ internal object ChatPlayerHarness {
             actions += ChatLegalAction("unit:${unit.id}:list", "unit", "$unitLabel — unit-specific commands not enabled yet", false)
         }
 
+        actions += ChatLegalAction("automate:economy", "automation", "Economy automation category present but executor not enabled yet", false)
         actions += ChatLegalAction("policy:list", "policy", "Policy choice category present but executor not enabled yet", false)
         actions += ChatLegalAction("diplomacy:list", "diplomacy", "Diplomacy category present but executor not enabled yet", false)
         actions += ChatLegalAction("religion:list", "religion", "Religion category present but executor not enabled yet", false)
@@ -220,20 +180,6 @@ internal object ChatPlayerHarness {
 
         return actions
     }
-
-    private fun buildableConstructions(city: com.unciv.logic.city.City): List<IConstruction> {
-        val constructions = ArrayList<IConstruction>()
-        for (building in city.getRuleset().buildings.values) {
-            if (building.isBuildable(city.cityConstructions)) constructions += building
-        }
-        for (unit in city.getRuleset().units.values) {
-            if (unit.isBuildable(city.cityConstructions)) constructions += unit
-        }
-        return constructions
-    }
-
-    private fun constructionByName(city: com.unciv.logic.city.City, name: String): IConstruction? =
-        city.getRuleset().buildings[name] ?: city.getRuleset().units[name]
 
     private fun writeOutputs(
         config: ChatPlayerConfig,
@@ -340,21 +286,17 @@ internal object ChatPlayerHarness {
             json("notes", "Stable ChatGPT benchmark player lane for comparing built-in and neural-assisted Unciv AI opponents.")
         ).joinToString(",") + "}\n"
 
-    private fun matchLogJson(
-        config: ChatPlayerConfig,
-        gameInfo: GameInfo,
-        results: List<ChatActionResult>,
-        scoreboard: ChatScoreboardRow
-    ): String = "{" + listOf(
-        json("matchId", config.matchId),
-        json("benchmarkProfile", config.benchmarkProfile),
-        json("benchmarkVersion", config.benchmarkVersion),
-        json("opponentLabel", config.opponentLabel),
-        json("turn", gameInfo.turns),
-        json("currentPlayer", gameInfo.currentPlayer),
-        "\"scoreboard\":${scoreboard.toJson()}",
-        "\"results\":${listJson(results.map { it.toJson() })}"
-    ).joinToString(",") + "}"
+    private fun matchLogJson(config: ChatPlayerConfig, gameInfo: GameInfo, results: List<ChatActionResult>, scoreboard: ChatScoreboardRow): String =
+        "{" + listOf(
+            json("matchId", config.matchId),
+            json("benchmarkProfile", config.benchmarkProfile),
+            json("benchmarkVersion", config.benchmarkVersion),
+            json("opponentLabel", config.opponentLabel),
+            json("turn", gameInfo.turns),
+            json("currentPlayer", gameInfo.currentPlayer),
+            "\"scoreboard\":${scoreboard.toJson()}",
+            "\"results\":${listJson(results.map { it.toJson() })}"
+        ).joinToString(",") + "}"
 
     private fun scoreboardRow(config: ChatPlayerConfig, gameInfo: GameInfo, results: List<ChatActionResult>): ChatScoreboardRow {
         val civ = gameInfo.currentPlayerCiv
@@ -383,13 +325,7 @@ internal object ChatPlayerHarness {
         )
     }
 
-    private fun reportMarkdown(
-        gameInfo: GameInfo,
-        actions: List<ChatLegalAction>,
-        results: List<ChatActionResult>,
-        config: ChatPlayerConfig,
-        scoreboard: ChatScoreboardRow
-    ): String = buildString {
+    private fun reportMarkdown(gameInfo: GameInfo, actions: List<ChatLegalAction>, results: List<ChatActionResult>, config: ChatPlayerConfig, scoreboard: ChatScoreboardRow): String = buildString {
         appendLine("# Chat Player Harness")
         appendLine()
         appendLine("- Match ID: `${config.matchId}`")
@@ -449,7 +385,6 @@ internal object ChatPlayerHarness {
 
     private fun json(name: String, value: String?): String =
         "\"$name\":${if (value == null) "null" else "\"${escapeJson(value)}\""}"
-
     private fun json(name: String, value: Int): String = "\"$name\":$value"
     private fun json(name: String, value: Double): String = "\"$name\":$value"
     private fun json(name: String, value: Boolean): String = "\"$name\":$value"
@@ -465,12 +400,7 @@ internal object ChatPlayerHarness {
         .replace("\\\\", "\\")
 }
 
-private data class ChatLegalAction(
-    val actionId: String,
-    val category: String,
-    val label: String,
-    val supported: Boolean
-) {
+private data class ChatLegalAction(val actionId: String, val category: String, val label: String, val supported: Boolean) {
     fun toJson(): String = "{" + listOf(
         json("actionId", actionId),
         json("category", category),
@@ -479,12 +409,7 @@ private data class ChatLegalAction(
     ).joinToString(",") + "}"
 }
 
-private data class ChatActionResult(
-    val actionId: String,
-    val applied: Boolean,
-    val error: Boolean,
-    val message: String
-) {
+private data class ChatActionResult(val actionId: String, val applied: Boolean, val error: Boolean, val message: String) {
     fun toJson(): String = "{" + listOf(
         json("actionId", actionId),
         json("applied", applied),
