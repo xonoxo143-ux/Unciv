@@ -67,6 +67,7 @@ internal object ChatPlayerHarness {
     private fun loadOrCreateGame(config: ChatPlayerConfig): GameInfo {
         val saveFile = File(config.saveFile)
         if (!config.newGame && saveFile.exists() && saveFile.isFile) {
+            ensureBenchmarkNations()
             return UncivFiles.gameInfoFromString(saveFile.readText())
         }
         val setupInfo = createGameSetup(config.seed)
@@ -75,13 +76,14 @@ internal object ChatPlayerHarness {
         return gameInfo
     }
 
-    private fun createGameSetup(seed: Int): GameSetupInfo {
-        val ruleset = RulesetCache[BaseRuleset.Civ_V_GnK.fullName]!!
+    private fun ensureBenchmarkNations() =
+        RulesetCache[BaseRuleset.Civ_V_GnK.fullName]!!.also { ruleset ->
+            if (!ruleset.nations.containsKey(simulationCiv1)) ruleset.nations[simulationCiv1] = Nation().apply { name = simulationCiv1 }
+            if (!ruleset.nations.containsKey(simulationCiv2)) ruleset.nations[simulationCiv2] = Nation().apply { name = simulationCiv2 }
+        }
 
-        val chatNation = Nation().apply { name = simulationCiv1 }
-        ruleset.nations[simulationCiv1] = chatNation
-        val opponentNation = Nation().apply { name = simulationCiv2 }
-        ruleset.nations[simulationCiv2] = opponentNation
+    private fun createGameSetup(seed: Int): GameSetupInfo {
+        val ruleset = ensureBenchmarkNations()
 
         val gameParameters = GameParameters().apply {
             difficulty = "King"
@@ -89,8 +91,8 @@ internal object ChatPlayerHarness {
             speed = Speed.DEFAULT
             noBarbarians = true
             players = ArrayList<Player>().apply {
-                add(Player(chatNation, PlayerType.Human, "chatgpt"))
-                add(Player(opponentNation, PlayerType.AI, "benchmark-opponent"))
+                add(Player(ruleset.nations[simulationCiv1]!!, PlayerType.Human, "chatgpt"))
+                add(Player(ruleset.nations[simulationCiv2]!!, PlayerType.AI, "benchmark-opponent"))
             }
         }
 
