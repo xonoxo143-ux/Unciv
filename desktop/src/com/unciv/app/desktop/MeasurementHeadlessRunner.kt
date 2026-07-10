@@ -266,6 +266,9 @@ internal object MeasurementHeadlessRunner {
             gameInfo.gameParameters.victoryTypes = ArrayList(gameInfo.ruleset.victories.keys)
             UncivGame.Current.gameInfo = gameInfo
 
+            val valueSamples = ArrayList<HeadlessValueSample>()
+            HeadlessTrainingLogger.captureValueSamples(gameInfo, seed, "start", valueSamples)
+
             val step = SimulationStep(gameInfo, config.statTurns)
             gameInfo.simulateUntilWin = true
 
@@ -274,6 +277,7 @@ internal object MeasurementHeadlessRunner {
                 gameInfo.simulateMaxTurns = turn
                 gameInfo.nextTurn()
                 step.update(gameInfo)
+                HeadlessTrainingLogger.captureValueSamples(gameInfo, seed, "turn-$turn", valueSamples)
                 if (step.victoryType != null) break
                 step.saveTurnStats(gameInfo)
             }
@@ -289,6 +293,15 @@ internal object MeasurementHeadlessRunner {
                 step.winner = step.currentPlayer
                 step.saveTurnStats(gameInfo)
             }
+
+            HeadlessTrainingLogger.captureValueSamples(gameInfo, seed, "final", valueSamples)
+            HeadlessTrainingLogger.writeValueSamples(
+                File(config.outputDir, "value-training.jsonl"),
+                valueSamples,
+                step.winner,
+                step.victoryType,
+                step.turns
+            )
 
             MeasuredGame(
                 seed = seed,
@@ -516,6 +529,8 @@ private class MeasurementResultWriter(private val config: MeasurementConfig) {
             appendLine("- games.jsonl")
             appendLine("- crashes.jsonl")
             appendLine("- seeds/<seed>/console.log")
+            appendLine("- seeds/<seed>/command.txt")
+            appendLine("- seeds/<seed>/value-training.jsonl")
         }
 
         reportFile.writeText(text)
