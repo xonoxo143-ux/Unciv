@@ -74,6 +74,40 @@ Train the bundled dependency-free neural value model with:
 python3 train_headless_value_model.py --input measurement-results --output measurement-results/value-model.json --epochs 300 --hidden 16 --verbose
 ```
 
-This produces a tiny MLP value model that predicts eventual win probability from checkpoint features. It is not yet controlling the AI; it is the first real game-learning artifact: real games -> labeled states -> trained model.
+Evaluate whether the model is picking the eventual winner at each checkpoint:
+
+```bash
+python3 evaluate_headless_value_model.py --input measurement-results --model measurement-results/value-model.json --output measurement-results/value-evaluation
+```
+
+The evaluator writes:
+
+- `value-evaluation/report.md`
+- `value-evaluation/matchups.csv`
+- `value-evaluation/metrics.json`
+
+## Neural construction reranking
+
+The runtime can now load a trained `value-model.json` and use it as a bounded reranker for city construction decisions. It does not replace the original AI. It nudges the existing construction score up or down by at most 25%.
+
+Enable it with either a JVM property:
+
+```bash
+java -Dunciv.neural.valueModel=measurement-results/value-model.json -jar UncivHeadless.jar --games 20 --output measurement-results/neural-construction
+```
+
+or an environment variable:
+
+```bash
+UNCIV_NEURAL_VALUE_MODEL=measurement-results/value-model.json java -jar UncivHeadless.jar --games 20 --output measurement-results/neural-construction
+```
+
+Optional strength override:
+
+```bash
+java -Dunciv.neural.valueModel=measurement-results/value-model.json -Dunciv.neural.constructionStrength=1.0 -jar UncivHeadless.jar --games 20 --output measurement-results/neural-construction
+```
+
+This is the first control path: real games -> value model -> neural-assisted city construction. It still needs paired baseline-vs-neural measurement before it should be considered better than the built-in AI.
 
 This is the bridge artifact for letting ChatGPT run real seeded Unciv simulations after the GitHub Action builds the jar.
