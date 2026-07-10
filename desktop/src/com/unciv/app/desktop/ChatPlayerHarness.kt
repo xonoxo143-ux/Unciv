@@ -6,6 +6,9 @@ import com.unciv.Constants.simulationCiv2
 import com.unciv.UncivGame
 import com.unciv.logic.GameInfo
 import com.unciv.logic.GameStarter
+import com.unciv.logic.automation.unit.UnitAutomation
+import com.unciv.logic.city.City
+import com.unciv.logic.city.managers.CityFounder
 import com.unciv.logic.files.UncivFiles
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.civilization.PlayerType
@@ -13,6 +16,7 @@ import com.unciv.logic.map.MapParameters
 import com.unciv.logic.map.MapSize
 import com.unciv.logic.map.MirroringType
 import com.unciv.logic.map.mapunit.MapUnit
+import com.unciv.models.UnitActionType
 import com.unciv.models.metadata.BaseRuleset
 import com.unciv.models.metadata.GameParameters
 import com.unciv.models.metadata.GameSettings
@@ -21,6 +25,7 @@ import com.unciv.models.metadata.Player
 import com.unciv.models.ruleset.RulesetCache
 import com.unciv.models.ruleset.Speed
 import com.unciv.models.ruleset.nation.Nation
+import com.unciv.models.ruleset.unique.UniqueType
 import com.unciv.models.skins.SkinCache
 import com.unciv.models.tilesets.TileSetCache
 import java.io.File
@@ -49,6 +54,7 @@ internal object ChatPlayerHarness {
         writeOutputs(config, gameInfo, results, beforeTurn, beforePlayer)
         val rejected = results.count { !it.applied }
         println("Chat player harness complete: match=${config.matchId} profile=${config.benchmarkProfile} actions=${results.size} rejected=$rejected output=${config.outputDir}")
+        println(progressReport(gameInfo, results, config))
         exitProcess(if (results.any { it.error }) 1 else 0)
     }
 
@@ -125,10 +131,15 @@ internal object ChatPlayerHarness {
         val legal = legalActions(gameInfo).associateBy { it.actionId }
         val legalAction = legal[actionId]
             ?: return ChatActionResult(actionId, false, false, "Rejected: unknown or currently illegal action ID")
+        if (!legalAction.supported) return ChatActionResult(actionId, false, false, "Unsupported action category: ${legalAction.category}")
 
         return runCatching {
             when {
                 actionId.startsWith("research:") -> applyResearch(gameInfo.currentPlayerCiv, actionId.removePrefix("research:"))
+                actionId.startsWith("construction:") -> applyConstruction(gameInfo.currentPlayerCiv, actionId)
+                actionId.startsWith("foundCity:") -> applyFoundCity(gameInfo.currentPlayerCiv, actionId.removePrefix("foundCity:"))
+                actionId.startsWith("unit:") -> applyUnitCommand(gameInfo.currentPlayerCiv, actionId)
+                actionId == "automate:economy" -> automateEconomy(gameInfo.currentPlayerCiv)
                 actionId == "endTurn" -> {
                     gameInfo.nextTurn()
                     "Ended turn and advanced to ${gameInfo.currentPlayer} on turn ${gameInfo.turns}"
@@ -148,6 +159,77 @@ internal object ChatPlayerHarness {
         return "Research set to $techName"
     }
 
+    private fun applyConstruction(civ: Civilization, actionId: String): String {
+        val parts = actionId.split(":", limit = 3)
+        if (parts.size != 3) return "Rejected: malformed construction action"
+        val city = findCity(civ, parts[1]) ?: return "Rejected: city ${parts[1]} not found"
+        val constructionName = parts[2]
+        val construction = city.getRuleset().buildings[constructionName] ?: city.getRuleset().units[constructionName]
+            ?: return "Rejected: construction $constructionName not found"
+        if (!construction.isBuildable(city.cityConstructions)) return "Rejected: $constructionName is not buildable in ${city.name}"
+        city.cityConstructions.setCurrentConstruction(constructionName)
+        city.cityConstructions.currentConstructionIsUserSet = true
+        return "${city.name} construction set to $constructionName"
+    }
+
+    private fun applyFoundCity(civ: Civilization, unitIdText: String): String {
+        val unit = findUnit(civ, unitIdText) ?: return "Rejected: unit $unitIdText not found"
+        val tile = unit.getTile()
+        if (!unit.hasMovement()) return "Rejected: unit ${unit.id} has no movement"
+        if (!unitCanFoundCity(unit)) return "Rejected: unit ${unit.id} cannot found a city"
+        if (!tile.canBeSettled(civ)) return "Rejected: tile ${tile.position} cannot be settled"
+        val city = CityFounder().foundCity(civ, tile.position, unit)
+        unit.destroy()
+        civ.updateStatsForNextTurn()
+        return "Founded ${city.name} at ${tile.position} with unit ${unit.id}"
+    }
+
+    private fun applyUnitCommand(civ: Civilization, actionId: String): String {
+        val parts = actionId.split(":", limit = 3)
+        if (parts.size != 3) return "Rejected: malformed unit action"
+        val unit = findUnit(civ, parts[1]) ?: return "Rejected: unit ${parts[1]} not found"
+        return when (parts[2]) {
+            "automate" -> {
+                if (!unit.hasMovement()) return "Rejected: unit ${unit.id} has no movement"
+                unit.automated = true
+                UnitAutomation.automateUnitMoves(unit)
+                "Automated unit ${unit.id} (${unit.name})"
+            }
+            "fortify" -> {
+                if (!unit.canFortify() || !unit.hasMovement()) return "Rejected: unit ${unit.id} cannot fortify now"
+                unit.fortify()
+                "Fortified unit ${unit.id} (${unit.name})"
+            }
+            "sleep" -> {
+                if (!unit.hasMovement()) return "Rejected: unit ${unit.id} has no movement"
+                unit.action = UnitActionType.Sleep.value
+                "Unit ${unit.id} (${unit.name}) set to sleep"
+            }
+            "skip" -> {
+                if (!unit.hasMovement()) return "Rejected: unit ${unit.id} has no movement"
+                unit.due = false
+                "Skipped unit ${unit.id} (${unit.name}) this turn"
+            }
+            "wake" -> {
+                unit.action = null
+                unit.automated = false
+                unit.due = true
+                "Cleared automation/action for unit ${unit.id} (${unit.name})"
+            }
+            else -> "Rejected: unsupported unit command ${parts[2]}"
+        }
+    }
+
+    private fun automateEconomy(civ: Civilization): String {
+        var changed = 0
+        for (city in civ.cities) {
+            val before = city.cityConstructions.currentConstructionName()
+            city.cityConstructions.chooseNextConstruction()
+            if (city.cityConstructions.currentConstructionName() != before) changed++
+        }
+        return "Economy automation refreshed construction queues in ${civ.cities.size} cities; changed=$changed"
+    }
+
     private fun legalActions(gameInfo: GameInfo): List<ChatLegalAction> {
         val civ = gameInfo.currentPlayerCiv
         val actions = ArrayList<ChatLegalAction>()
@@ -158,21 +240,38 @@ internal object ChatPlayerHarness {
             }
         }
 
+        for (unit in civ.units.getCivUnits().sortedWith(compareBy<MapUnit> { it.id }.thenBy { it.name })) {
+            if (unitCanFoundCity(unit) && unit.hasMovement() && unit.getTile().canBeSettled(civ)) {
+                actions += ChatLegalAction("foundCity:${unit.id}", "foundCity", "Found city with ${unit.name} #${unit.id} at ${unit.getTile().position}", true)
+            }
+        }
+
         for (city in civ.cities.sortedBy { it.name }) {
-            actions += ChatLegalAction(
-                "construction:${cityToken(city)}:list",
-                "cityConstruction",
-                "${city.name}: construction category present but executor not enabled yet",
-                false
-            )
+            val cityId = cityToken(city)
+            val buildables = buildableConstructions(city)
+            if (buildables.isEmpty()) {
+                actions += ChatLegalAction("construction:$cityId:list", "cityConstruction", "${city.name}: no buildable construction found", false)
+            } else {
+                for (name in buildables) {
+                    actions += ChatLegalAction("construction:$cityId:$name", "cityConstruction", "${city.name}: build $name", true)
+                }
+            }
         }
 
         for (unit in civ.units.getCivUnits().sortedWith(compareBy<MapUnit> { it.id }.thenBy { it.name })) {
             val unitLabel = "${unit.name} #${unit.id} at ${unit.currentTile.position}"
-            actions += ChatLegalAction("unit:${unit.id}:list", "unit", "$unitLabel — unit-specific commands not enabled yet", false)
+            if (unit.hasMovement()) {
+                actions += ChatLegalAction("unit:${unit.id}:skip", "unit", "$unitLabel — skip this unit", true)
+                actions += ChatLegalAction("unit:${unit.id}:wake", "unit", "$unitLabel — clear automation/action", true)
+                actions += ChatLegalAction("unit:${unit.id}:automate", "unit", "$unitLabel — allow built-in automation to act", true)
+                if (unit.canFortify()) actions += ChatLegalAction("unit:${unit.id}:fortify", "unit", "$unitLabel — fortify", true)
+                if (!unit.canFortify() && !unit.isFortified()) actions += ChatLegalAction("unit:${unit.id}:sleep", "unit", "$unitLabel — sleep", true)
+            } else {
+                actions += ChatLegalAction("unit:${unit.id}:list", "unit", "$unitLabel — no movement available", false)
+            }
         }
 
-        actions += ChatLegalAction("automate:economy", "automation", "Economy automation category present but executor not enabled yet", false)
+        if (civ.cities.isNotEmpty()) actions += ChatLegalAction("automate:economy", "automation", "Refresh city construction queues with built-in economic automation", true)
         actions += ChatLegalAction("policy:list", "policy", "Policy choice category present but executor not enabled yet", false)
         actions += ChatLegalAction("diplomacy:list", "diplomacy", "Diplomacy category present but executor not enabled yet", false)
         actions += ChatLegalAction("religion:list", "religion", "Religion category present but executor not enabled yet", false)
@@ -182,6 +281,22 @@ internal object ChatPlayerHarness {
 
         return actions
     }
+
+    private fun buildableConstructions(city: City): List<String> =
+        (city.getRuleset().buildings.values.asSequence().filter { it.isBuildable(city.cityConstructions) }.map { it.name } +
+            city.getRuleset().units.values.asSequence().filter { it.isBuildable(city.cityConstructions) }.map { it.name })
+            .distinct()
+            .sorted()
+            .toList()
+
+    private fun unitCanFoundCity(unit: MapUnit): Boolean =
+        unit.getMatchingUniques(UniqueType.FoundCity).any() || unit.getMatchingUniques(UniqueType.FoundPuppetCity).any()
+
+    private fun findCity(civ: Civilization, idOrName: String): City? =
+        civ.cities.firstOrNull { cityToken(it) == idOrName || it.name == idOrName }
+
+    private fun findUnit(civ: Civilization, unitIdText: String): MapUnit? =
+        unitIdText.toIntOrNull()?.let { id -> civ.units.getCivUnits().firstOrNull { it.id == id } }
 
     private fun writeOutputs(
         config: ChatPlayerConfig,
@@ -201,8 +316,11 @@ internal object ChatPlayerHarness {
         File(outputDir, "legal-actions.json").writeText(listJson(actions.map { it.toJson() }))
         File(outputDir, "result.json").writeText(resultJson(results, config, scoreboard))
         File(outputDir, "benchmark.json").writeText(benchmarkJson(config))
+        File(outputDir, "progress-report.md").writeText(progressReport(gameInfo, results, config))
+        File(outputDir, "progress-report.json").writeText(progressReportJson(gameInfo, results, config))
         File(outputDir, "report.md").writeText(reportMarkdown(gameInfo, actions, results, config, scoreboard))
         appendLine(File(outputDir, "match-log.jsonl"), matchLogJson(config, gameInfo, results, scoreboard))
+        appendLine(File(outputDir, "progress-log.md"), progressReport(gameInfo, results, config))
         appendScoreboard(File(outputDir, "scoreboard.csv"), scoreboard)
     }
 
@@ -227,7 +345,10 @@ internal object ChatPlayerHarness {
                 json("movement", unit.currentMovement.toDouble()),
                 json("x", unit.currentTile.position.x),
                 json("y", unit.currentTile.position.y),
-                json("supportedCommands", false)
+                json("action", unit.action),
+                json("automated", unit.automated),
+                json("due", unit.due),
+                json("canFoundCityHere", unitCanFoundCity(unit) && unit.hasMovement() && unit.getTile().canBeSettled(civ))
             ).joinToString(",") + "}"
         }
         return "{" + listOf(
@@ -287,6 +408,57 @@ internal object ChatPlayerHarness {
             json("unsupportedActionsMustRejectWithoutMutation", true),
             json("notes", "Stable ChatGPT benchmark player lane for comparing built-in and neural-assisted Unciv AI opponents.")
         ).joinToString(",") + "}\n"
+
+    private fun progressReport(gameInfo: GameInfo, results: List<ChatActionResult>, config: ChatPlayerConfig): String {
+        val civ = gameInfo.currentPlayerCiv
+        val threat = when {
+            civ.cities.isEmpty() -> "Critical: no city founded yet."
+            civ.units.getCivUnits().any { unit -> unit.currentTile.neighbors.any { tile -> tile.militaryUnit?.let { civ.isAtWarWith(it.civ) } == true } } -> "High: enemy military adjacent to at least one unit."
+            civ.getKnownCivs().any { civ.isAtWarWith(it) } -> "Medium: currently at war."
+            else -> "Low: no immediate visible military pressure."
+        }
+        val plan = when {
+            civ.cities.isEmpty() -> "Found the capital immediately, then set early research and first city construction."
+            civ.tech.currentTechnologyName().isEmpty() -> "Choose a research target before ending more turns."
+            civ.cities.any { it.cityConstructions.currentConstructionName().isEmpty() } -> "Set construction in idle cities."
+            civ.units.getCivUnits().any { it.hasMovement() && it.due } -> "Resolve movable units before ending the turn."
+            else -> "End turn and let the benchmark opponent respond."
+        }
+        val interesting = results.filter { it.applied || it.error || it.message.startsWith("Rejected") }
+        return buildString {
+            appendLine("## Chat benchmark POV")
+            appendLine()
+            appendLine("- Match: `${config.matchId}`")
+            appendLine("- Turn: ${gameInfo.turns}")
+            appendLine("- Current player: ${gameInfo.currentPlayer}")
+            appendLine("- Current plan: $plan")
+            appendLine("- Threat level: $threat")
+            appendLine("- Cities: ${civ.cities.size}")
+            appendLine("- Units: ${civ.units.getCivUnitsSize()}")
+            appendLine("- Research: ${civ.tech.currentTechnologyName().ifEmpty { "none selected" }}")
+            appendLine("- Gold: ${civ.gold}")
+            appendLine("- Confidence: moderate; this report uses visible exported benchmark state only.")
+            if (interesting.isNotEmpty()) {
+                appendLine()
+                appendLine("### What changed")
+                for (result in interesting) appendLine("- `${result.actionId}`: ${result.message}")
+            }
+        }
+    }
+
+    private fun progressReportJson(gameInfo: GameInfo, results: List<ChatActionResult>, config: ChatPlayerConfig): String {
+        val civ = gameInfo.currentPlayerCiv
+        return "{" + listOf(
+            json("matchId", config.matchId),
+            json("turn", gameInfo.turns),
+            json("currentPlayer", gameInfo.currentPlayer),
+            json("cities", civ.cities.size),
+            json("units", civ.units.getCivUnitsSize()),
+            json("research", civ.tech.currentTechnologyName()),
+            json("gold", civ.gold),
+            "\"results\":${listJson(results.map { it.toJson() })}"
+        ).joinToString(",") + "}\n"
+    }
 
     private fun matchLogJson(config: ChatPlayerConfig, gameInfo: GameInfo, results: List<ChatActionResult>, scoreboard: ChatScoreboardRow): String =
         "{" + listOf(
@@ -359,6 +531,10 @@ internal object ChatPlayerHarness {
         appendLine("- Culture/turn: ${scoreboard.culture}")
         appendLine("- Happiness: ${scoreboard.happiness}")
         appendLine()
+        appendLine("## Progress POV")
+        appendLine()
+        appendLine(progressReport(gameInfo, results, config))
+        appendLine()
         appendLine("## Applied/rejected commands")
         appendLine()
         if (results.isEmpty()) appendLine("No commands supplied. Use `legal-actions.json` to choose exact action IDs.")
@@ -366,7 +542,7 @@ internal object ChatPlayerHarness {
         appendLine()
         appendLine("## First legal actions")
         appendLine()
-        for (action in actions.take(30)) appendLine("- `${action.actionId}` — ${action.label}${if (action.supported) "" else " _(unsupported)_"}")
+        for (action in actions.take(40)) appendLine("- `${action.actionId}` — ${action.label}${if (action.supported) "" else " _(unsupported)_"}")
     }
 
     private fun appendLine(file: File, line: String) {
@@ -380,7 +556,7 @@ internal object ChatPlayerHarness {
         file.appendText(row.toCsv() + "\n")
     }
 
-    private fun cityToken(city: com.unciv.logic.city.City): String =
+    private fun cityToken(city: City): String =
         city.id.takeIf { it.isNotBlank() && it != Constants.NO_ID.toString() } ?: city.name
 
     private fun listJson(values: Iterable<String>): String = values.joinToString(prefix = "[", postfix = "]")
