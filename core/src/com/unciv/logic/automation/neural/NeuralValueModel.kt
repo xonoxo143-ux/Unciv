@@ -181,7 +181,7 @@ private data class TinyValueModel(
     fun score(featureValues: Map<String, Double>): Double {
         val x = features.mapIndexed { index, feature ->
             val std = stds.getOrElse(index) { 1.0 }.let { if (it == 0.0) 1.0 else it }
-            (featureValues[feature] ?: 0.0 - means.getOrElse(index) { 0.0 }) / std
+            ((featureValues[feature] ?: 0.0) - means.getOrElse(index) { 0.0 }) / std
         }
         val hidden = w1.mapIndexed { index, row ->
             tanh(b1.getOrElse(index) { 0.0 } + row.zip(x).sumOf { it.first * it.second })
