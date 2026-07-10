@@ -4,6 +4,8 @@ import com.unciv.GUI
 import com.unciv.UncivGame
 import com.unciv.logic.automation.Automation
 import com.unciv.logic.automation.civilization.NextTurnAutomation
+import com.unciv.logic.automation.neural.NeuralFeatureAdjustments
+import com.unciv.logic.automation.neural.NeuralValueModel
 import com.unciv.logic.automation.unit.WorkerAutomation
 import com.unciv.logic.city.CityConstructions
 import com.unciv.logic.civilization.CityAction
@@ -135,7 +137,7 @@ class ConstructionAutomation(val cityConstructions: CityConstructions) {
                     PerpetualConstruction.faith.isBuildable(cityConstructions) -> PerpetualConstruction.faith
                     else -> PerpetualConstruction.idle
                 }
-            } else { relativeCostEffectiveness.maxBy { (it.choiceModifier / it.remainingWork.coerceAtLeast(1)).coerceAtLeast(0f) }.choice }
+            } else chooseBestConstruction()
             //TODO: All bad things are build anyways at the moment, maybe let's stop doing that and chose perpetual construction instead
 
         // Do not notify while in resistance (you can't do anything about it) - still notify for puppets ("annex already!")
@@ -154,6 +156,42 @@ class ConstructionAutomation(val cityConstructions: CityConstructions) {
             NotificationCategory.Production,
             NotificationIcon.Construction
         )
+    }
+
+    private fun chooseBestConstruction(): IConstruction {
+        if (!NeuralValueModel.isEnabled())
+            return relativeCostEffectiveness.maxBy { baseChoiceScore(it) }.choice
+        return relativeCostEffectiveness.maxBy { neuralAdjustedChoiceScore(it) }.choice
+    }
+
+    private fun baseChoiceScore(choice: ConstructionChoice): Float =
+        (choice.choiceModifier / choice.remainingWork.coerceAtLeast(1)).coerceAtLeast(0f)
+
+    private fun neuralAdjustedChoiceScore(choice: ConstructionChoice): Float {
+        val baseScore = baseChoiceScore(choice)
+        if (baseScore <= 0f) return baseScore
+        val delta = NeuralValueModel.scoreConstructionAdjustment(civInfo, neuralAdjustmentsForConstruction(choice.choice))
+            ?: return baseScore
+        val multiplier = (1.0 + delta * NeuralValueModel.constructionStrength()).coerceIn(0.75, 1.25)
+        return (baseScore * multiplier).toFloat()
+    }
+
+    private fun neuralAdjustmentsForConstruction(construction: IConstruction): NeuralFeatureAdjustments {
+        return when (construction) {
+            is Building -> {
+                val stats = getStatDifferenceFromBuilding(construction.name)
+                NeuralFeatureAdjustments(
+                    production = stats.production.toDouble(),
+                    food = stats.food.toDouble(),
+                    goldPerTurn = stats.gold.toDouble(),
+                    science = stats.science.toDouble(),
+                    culture = stats.culture.toDouble(),
+                    happiness = stats.happiness.toDouble()
+                )
+            }
+            is BaseUnit -> NeuralFeatureAdjustments(units = 1.0)
+            else -> NeuralFeatureAdjustments()
+        }
     }
 
     private fun addMilitaryUnitChoice() {
