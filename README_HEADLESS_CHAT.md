@@ -110,4 +110,59 @@ java -Dunciv.neural.valueModel=measurement-results/value-model.json -Dunciv.neur
 
 This is the first control path: real games -> value model -> neural-assisted city construction. It still needs paired baseline-vs-neural measurement before it should be considered better than the built-in AI.
 
+## Chat player harness
+
+The chat player harness is the compromise lane for ChatGPT-style manual play. It exposes broad action categories immediately, but only applies actions that are currently safe and legal. Unsupported categories are returned as unsupported action IDs and reject without mutating the save.
+
+Create or inspect a game:
+
+```bash
+java -cp UncivHeadless.jar com.unciv.app.desktop.ChatPlayerHarness --new-game --seed 42017 --output chat-player-output --save-file chat-player-output/chat-player-save.json
+```
+
+The harness writes:
+
+- `chat-player-output/state.json`
+- `chat-player-output/legal-actions.json`
+- `chat-player-output/result.json`
+- `chat-player-output/report.md`
+- `chat-player-output/chat-player-save.json`
+
+Apply commands from exact legal action IDs:
+
+```bash
+java -cp UncivHeadless.jar com.unciv.app.desktop.ChatPlayerHarness --commands commands.json --output chat-player-output --save-file chat-player-output/chat-player-save.json
+```
+
+Command file format:
+
+```json
+{
+  "actions": [
+    {"actionId": "research:Writing"},
+    {"actionId": "construction:Rome:Scout"},
+    {"actionId": "endTurn"}
+  ]
+}
+```
+
+Supported in the first version:
+
+- research choice
+- city construction choice
+- built-in economy automation once
+- end turn
+- persisted save/load between invocations
+
+Present but safely unsupported in the first version:
+
+- detailed unit commands
+- policies
+- diplomacy
+- religion
+- great-person choices
+- gold purchases/spending
+
+This is intentionally broad but guarded: legal action IDs first, executor second, no silent mutation for unsupported categories.
+
 This is the bridge artifact for letting ChatGPT run real seeded Unciv simulations after the GitHub Action builds the jar.
