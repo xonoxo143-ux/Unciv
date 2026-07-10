@@ -261,7 +261,7 @@ internal object ChatPlayerHarness {
                     json("isDefeated", other.isDefeated())
                 ).joinToString(",") + "}"
             }
-        return listJson(known.asIterable())
+        return listJson(known)
     }
 
     private fun resultJson(results: List<ChatActionResult>, config: ChatPlayerConfig, scoreboard: ChatScoreboardRow): String =
@@ -382,6 +382,7 @@ internal object ChatPlayerHarness {
         city.id.takeIf { it.isNotBlank() && it != Constants.NO_ID.toString() } ?: city.name
 
     private fun listJson(values: Iterable<String>): String = values.joinToString(prefix = "[", postfix = "]")
+    private fun listJson(values: Sequence<String>): String = values.joinToString(prefix = "[", postfix = "]")
 
     private fun json(name: String, value: String?): String =
         "\"$name\":${if (value == null) "null" else "\"${escapeJson(value)}\""}"
