@@ -411,6 +411,7 @@ internal object ChatPlayerHarness {
 
     private fun progressReport(gameInfo: GameInfo, results: List<ChatActionResult>, config: ChatPlayerConfig): String {
         val civ = gameInfo.currentPlayerCiv
+        val currentResearch = civ.tech.currentTechnologyName().orEmpty()
         val threat = when {
             civ.cities.isEmpty() -> "Critical: no city founded yet."
             civ.units.getCivUnits().any { unit -> unit.currentTile.neighbors.any { tile -> tile.militaryUnit?.let { civ.isAtWarWith(it.civ) } == true } } -> "High: enemy military adjacent to at least one unit."
@@ -419,7 +420,7 @@ internal object ChatPlayerHarness {
         }
         val plan = when {
             civ.cities.isEmpty() -> "Found the capital immediately, then set early research and first city construction."
-            civ.tech.currentTechnologyName().isEmpty() -> "Choose a research target before ending more turns."
+            currentResearch.isEmpty() -> "Choose a research target before ending more turns."
             civ.cities.any { it.cityConstructions.currentConstructionName().isEmpty() } -> "Set construction in idle cities."
             civ.units.getCivUnits().any { it.hasMovement() && it.due } -> "Resolve movable units before ending the turn."
             else -> "End turn and let the benchmark opponent respond."
@@ -435,7 +436,7 @@ internal object ChatPlayerHarness {
             appendLine("- Threat level: $threat")
             appendLine("- Cities: ${civ.cities.size}")
             appendLine("- Units: ${civ.units.getCivUnitsSize()}")
-            appendLine("- Research: ${civ.tech.currentTechnologyName().ifEmpty { "none selected" }}")
+            appendLine("- Research: ${currentResearch.ifEmpty { "none selected" }}")
             appendLine("- Gold: ${civ.gold}")
             appendLine("- Confidence: moderate; this report uses visible exported benchmark state only.")
             if (interesting.isNotEmpty()) {
