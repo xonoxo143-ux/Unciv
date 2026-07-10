@@ -16,6 +16,7 @@ import com.unciv.logic.map.MapParameters
 import com.unciv.logic.map.MapSize
 import com.unciv.logic.map.MirroringType
 import com.unciv.logic.map.mapunit.MapUnit
+import com.unciv.logic.map.tile.Tile
 import com.unciv.models.UnitActionType
 import com.unciv.models.metadata.BaseRuleset
 import com.unciv.models.metadata.GameParameters
@@ -188,7 +189,9 @@ internal object ChatPlayerHarness {
         val parts = actionId.split(":", limit = 3)
         if (parts.size != 3) return "Rejected: malformed unit action"
         val unit = findUnit(civ, parts[1]) ?: return "Rejected: unit ${parts[1]} not found"
-        return when (parts[2]) {
+        val command = parts[2]
+        if (command.startsWith("move:")) return applyUnitMove(unit, command.removePrefix("move:"))
+        return when (command) {
             "automate" -> {
                 if (!unit.hasMovement()) return "Rejected: unit ${unit.id} has no movement"
                 unit.automated = true
@@ -216,8 +219,28 @@ internal object ChatPlayerHarness {
                 unit.due = true
                 "Cleared automation/action for unit ${unit.id} (${unit.name})"
             }
-            else -> "Rejected: unsupported unit command ${parts[2]}"
+            else -> "Rejected: unsupported unit command $command"
         }
+    }
+
+    private fun applyUnitMove(unit: MapUnit, destinationText: String): String {
+        val coordinates = destinationText.split(",", limit = 2)
+        if (coordinates.size != 2) return "Rejected: malformed movement destination"
+        val x = coordinates[0].toIntOrNull() ?: return "Rejected: malformed movement x coordinate"
+        val y = coordinates[1].toIntOrNull() ?: return "Rejected: malformed movement y coordinate"
+        val destination = unit.getTile().tileMap.getOrNull(x, y)
+            ?: return "Rejected: destination ($x,$y) is outside the map"
+        if (destination !in legalMoveDestinations(unit)) return "Rejected: destination ($x,$y) is not a legal current-turn move"
+
+        val origin = unit.getTile()
+        val movementBefore = unit.currentMovement
+        val destinationWasExplored = destination.isExplored(unit.civ)
+        val reached = unit.movement.headTowards(destination)
+        unit.due = unit.hasMovement()
+        val movementUsed = movementBefore - unit.currentMovement
+        val outcome = if (reached == destination) "reached requested destination" else "stopped at ${reached.position}"
+        val visibility = if (destinationWasExplored) "explored" else "previously unexplored"
+        return "Moved unit ${unit.id} (${unit.name}) from ${origin.position} toward ${destination.position}; $outcome; target=$visibility; movementUsed=$movementUsed remaining=${unit.currentMovement}"
     }
 
     private fun automateEconomy(civ: Civilization): String {
@@ -261,9 +284,18 @@ internal object ChatPlayerHarness {
         for (unit in civ.units.getCivUnits().sortedWith(compareBy<MapUnit> { it.id }.thenBy { it.name })) {
             val unitLabel = "${unit.name} #${unit.id} at ${unit.currentTile.position}"
             if (unit.hasMovement()) {
+                for (destination in legalMoveDestinations(unit)) {
+                    val visibility = if (destination.isExplored(civ)) "explored" else "unexplored"
+                    actions += ChatLegalAction(
+                        "unit:${unit.id}:move:${destination.position.x},${destination.position.y}",
+                        "unitMovement",
+                        "$unitLabel — move to ${destination.position} ($visibility)",
+                        true
+                    )
+                }
                 actions += ChatLegalAction("unit:${unit.id}:skip", "unit", "$unitLabel — skip this unit", true)
                 actions += ChatLegalAction("unit:${unit.id}:wake", "unit", "$unitLabel — clear automation/action", true)
-                actions += ChatLegalAction("unit:${unit.id}:automate", "unit", "$unitLabel — allow built-in automation to act", true)
+                actions += ChatLegalAction("unit:${unit.id}:automate", "unitAutomation", "$unitLabel — fallback built-in automation", true)
                 if (unit.canFortify()) actions += ChatLegalAction("unit:${unit.id}:fortify", "unit", "$unitLabel — fortify", true)
                 if (!unit.canFortify() && !unit.isFortified()) actions += ChatLegalAction("unit:${unit.id}:sleep", "unit", "$unitLabel — sleep", true)
             } else {
@@ -271,7 +303,7 @@ internal object ChatPlayerHarness {
             }
         }
 
-        if (civ.cities.isNotEmpty()) actions += ChatLegalAction("automate:economy", "automation", "Refresh city construction queues with built-in economic automation", true)
+        if (civ.cities.isNotEmpty()) actions += ChatLegalAction("automate:economy", "automation", "Fallback: refresh city construction queues with built-in economic automation", true)
         actions += ChatLegalAction("policy:list", "policy", "Policy choice category present but executor not enabled yet", false)
         actions += ChatLegalAction("diplomacy:list", "diplomacy", "Diplomacy category present but executor not enabled yet", false)
         actions += ChatLegalAction("religion:list", "religion", "Religion category present but executor not enabled yet", false)
@@ -281,6 +313,14 @@ internal object ChatPlayerHarness {
 
         return actions
     }
+
+    private fun legalMoveDestinations(unit: MapUnit): List<Tile> =
+        unit.movement.getReachableTilesInCurrentTurn()
+            .filter { it != unit.getTile() }
+            .filter { !it.isExplored(unit.civ) || unit.movement.canMoveTo(it) }
+            .distinctBy { it.position }
+            .sortedWith(compareBy<Tile> { it.position.x }.thenBy { it.position.y })
+            .toList()
 
     private fun buildableConstructions(city: City): List<String> =
         (city.getRuleset().buildings.values.asSequence().filter { it.isBuildable(city.cityConstructions) }.map { it.name } +
@@ -348,6 +388,7 @@ internal object ChatPlayerHarness {
                 json("action", unit.action),
                 json("automated", unit.automated),
                 json("due", unit.due),
+                json("legalMoveCount", if (unit.hasMovement()) legalMoveDestinations(unit).size else 0),
                 json("canFoundCityHere", unitCanFoundCity(unit) && unit.hasMovement() && unit.getTile().canBeSettled(civ))
             ).joinToString(",") + "}"
         }
@@ -406,6 +447,7 @@ internal object ChatPlayerHarness {
             json("visibleInformationOnly", true),
             json("legalActionIdsRequired", true),
             json("unsupportedActionsMustRejectWithoutMutation", true),
+            json("automationIsFallbackOnly", true),
             json("notes", "Stable ChatGPT benchmark player lane for comparing built-in and neural-assisted Unciv AI opponents.")
         ).joinToString(",") + "}\n"
 
@@ -422,7 +464,7 @@ internal object ChatPlayerHarness {
             civ.cities.isEmpty() -> "Found the capital immediately, then set early research and first city construction."
             currentResearch.isEmpty() -> "Choose a research target before ending more turns."
             civ.cities.any { it.cityConstructions.currentConstructionName().isEmpty() } -> "Set construction in idle cities."
-            civ.units.getCivUnits().any { it.hasMovement() && it.due } -> "Resolve movable units before ending the turn."
+            civ.units.getCivUnits().any { it.hasMovement() && it.due } -> "Choose explicit legal moves or unit actions before ending the turn."
             else -> "End turn and let the benchmark opponent respond."
         }
         val interesting = results.filter { it.applied || it.error || it.message.startsWith("Rejected") }
@@ -438,6 +480,7 @@ internal object ChatPlayerHarness {
             appendLine("- Units: ${civ.units.getCivUnitsSize()}")
             appendLine("- Research: ${currentResearch.ifEmpty { "none selected" }}")
             appendLine("- Gold: ${civ.gold}")
+            appendLine("- Automation policy: fallback only; explicit Sol decisions are preferred.")
             appendLine("- Confidence: moderate; this report uses visible exported benchmark state only.")
             if (interesting.isNotEmpty()) {
                 appendLine()
@@ -457,6 +500,7 @@ internal object ChatPlayerHarness {
             json("units", civ.units.getCivUnitsSize()),
             json("research", civ.tech.currentTechnologyName()),
             json("gold", civ.gold),
+            json("automationIsFallbackOnly", true),
             "\"results\":${listJson(results.map { it.toJson() })}"
         ).joinToString(",") + "}\n"
     }
@@ -519,7 +563,7 @@ internal object ChatPlayerHarness {
         appendLine()
         appendLine("## Visible-info rule")
         appendLine()
-        appendLine("The state export is intended to show the controlled civ plus known opponents only. Hidden map, enemy queues, and model internals are not exported in this benchmark lane.")
+        appendLine("The state export is intended to show the controlled civ plus known opponents only. Hidden map, enemy queues, and model internals are not exported in this benchmark lane. Unexplored tiles may appear only as coordinate targets for legal movement orders, without hidden terrain details.")
         appendLine()
         appendLine("## Scoreboard")
         appendLine()
@@ -543,7 +587,7 @@ internal object ChatPlayerHarness {
         appendLine()
         appendLine("## First legal actions")
         appendLine()
-        for (action in actions.take(40)) appendLine("- `${action.actionId}` — ${action.label}${if (action.supported) "" else " _(unsupported)_"}")
+        for (action in actions.take(60)) appendLine("- `${action.actionId}` — ${action.label}${if (action.supported) "" else " _(unsupported)_"}")
     }
 
     private fun appendLine(file: File, line: String) {
