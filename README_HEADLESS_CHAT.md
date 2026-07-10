@@ -49,6 +49,7 @@ The runner writes:
 - `report.md`
 - `seeds/<seed>/console.log`
 - `seeds/<seed>/command.txt`
+- `seeds/<seed>/value-training.jsonl`
 
 `summary.csv` includes a `status` column. Possible statuses are:
 
@@ -58,5 +59,21 @@ The runner writes:
 - `timeout`
 
 If a seed times out, the parent kills the child process, writes a timeout row, refreshes the report, and exits the overall run with code `124`.
+
+## First learning loop
+
+Each completed child seed writes `value-training.jsonl`. Every row is a civ snapshot from a real simulated game, labeled after the game finishes:
+
+- `1.0` means this civ eventually won.
+- `0.0` means this civ eventually lost.
+- `0.5` means the game was unresolved or drawn.
+
+Train the bundled dependency-free neural value model with:
+
+```bash
+python3 train_headless_value_model.py --input measurement-results --output measurement-results/value-model.json --epochs 300 --hidden 16 --verbose
+```
+
+This produces a tiny MLP value model that predicts eventual win probability from checkpoint features. It is not yet controlling the AI; it is the first real game-learning artifact: real games -> labeled states -> trained model.
 
 This is the bridge artifact for letting ChatGPT run real seeded Unciv simulations after the GitHub Action builds the jar.
