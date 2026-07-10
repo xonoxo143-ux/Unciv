@@ -136,6 +136,9 @@ The harness writes:
 - `chat-player-output/legal-actions.json`
 - `chat-player-output/result.json`
 - `chat-player-output/benchmark.json`
+- `chat-player-output/progress-report.md`
+- `chat-player-output/progress-report.json`
+- `chat-player-output/progress-log.md`
 - `chat-player-output/report.md`
 - `chat-player-output/match-log.jsonl`
 - `chat-player-output/scoreboard.csv`
@@ -161,27 +164,39 @@ Command file format:
   "actions": [
     {"actionId": "research:Writing"},
     {"actionId": "construction:Rome:Scout"},
+    {"actionId": "unit:2:move:-2,4"},
     {"actionId": "endTurn"}
   ]
 }
 ```
 
-Supported in the first version:
+Supported:
 
+- founding a city from an exported legal settler action
 - research choice
 - city construction choice
-- safe economy/construction automation once
+- explicit unit movement to exported current-turn destinations
+- unit skip, wake, sleep, and fortify controls
+- fallback unit automation
+- fallback economy/construction automation
 - end turn
 - persisted save/load between invocations
 - benchmark profile/version logging
+- POV progress reports
 - match log and scoreboard CSV
 
-Present but safely unsupported in the first version:
+Automation policy:
 
-- detailed unit commands
-- policies
-- diplomacy
-- religion
+- Explicit ChatGPT/Sol decisions are preferred during benchmark play.
+- Automation actions remain available as fallback controls only.
+- Automated movement or economy decisions should not be used in comparative matches unless the benchmark specifically calls for them.
+
+Present but safely unsupported:
+
+- manual attacks and city bombardment
+- policy adoption
+- diplomacy decisions
+- religion decisions
 - great-person choices
 - gold purchases/spending
 
@@ -189,6 +204,7 @@ Visible-information rule:
 
 - The state export is intended to show the controlled civ plus known opponents only.
 - Hidden map, enemy queues, enemy internal plans, model scores, and future outcomes are not exported in this benchmark lane.
+- Unexplored tiles may be emitted only as coordinate targets for legal movement orders; hidden terrain details are not included.
 
 This is intentionally broad but guarded: legal action IDs first, executor second, no silent mutation for unsupported categories.
 
