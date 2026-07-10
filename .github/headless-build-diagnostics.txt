@@ -120,7 +120,7 @@ headless_build_exit_code=0
 753:w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscreen/worldmap/WorldMapTileUpdater.kt:165:53 'fun getTilesInDistanceRange(range: IntRange): Sequence<Tile>' is deprecated. forEachTileInDistanceRange is faster. If not viable, then this can still be used.
 754:w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscreen/worldmap/WorldMapTileUpdater.kt:209:36 'fun getTilesInDistance(distance: Int): Sequence<Tile>' is deprecated. forEachTileInDistance is faster. If not viable, then this can still be used.
 755:w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscreen/worldmap/WorldMapTileUpdater.kt:251:43 'fun getCities(): Sequence<City>' is deprecated. forEachCity is faster. If not viable, then this can still be used.
-762:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatPlayerHarness.kt:252:25 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
+762:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatPlayerHarness.kt:254:25 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
 
 == Last 180 build lines ==
 w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/models/ruleset/IConstruction.kt:103:32 'fun getMatchingUniques(uniqueType: UniqueType, state: GameContext = ...): Sequence<Unique>' is deprecated. forEachMatchingUnique is faster. If not viable, then this can still be used.
@@ -293,13 +293,13 @@ w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscree
 > Task :core:jar
 
 > Task :desktop:compileKotlin
-w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatPlayerHarness.kt:252:25 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
+w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatPlayerHarness.kt:254:25 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
 
 > Task :desktop:compileJava NO-SOURCE
 > Task :desktop:classes UP-TO-DATE
 > Task :desktop:headlessDist
 > Task :desktop:chatHeadlessPack
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1783676184324.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1783698333138.json
 
-BUILD SUCCESSFUL in 3m 40s
+BUILD SUCCESSFUL in 3m 37s
 8 actionable tasks: 8 executed
