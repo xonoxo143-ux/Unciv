@@ -607,7 +607,6 @@ private data class ChatPlayerConfig(
 
 private fun json(name: String, value: String?): String =
     "\"$name\":${if (value == null) "null" else "\"${escapeJsonShared(value)}\""}"
-private fun json(name: String, value: String): String = "\"$name\":\"${escapeJsonShared(value)}\""
 private fun json(name: String, value: Int): String = "\"$name\":$value"
 private fun json(name: String, value: Double): String = "\"$name\":$value"
 private fun json(name: String, value: Boolean): String = "\"$name\":$value"
