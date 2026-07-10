@@ -217,6 +217,7 @@ tasks.register<Zip>("chatHeadlessPack") {
     from(file("$rootDir/scripts/run-headless.sh"))
     from(file("$rootDir/scripts/run-headless.bat"))
     from(file("$rootDir/scripts/train_headless_value_model.py"))
+    from(file("$rootDir/scripts/evaluate_headless_value_model.py"))
 }
 
 tasks.register<Zip>("zipLinuxFilesForJar") {
