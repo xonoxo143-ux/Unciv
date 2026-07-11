@@ -8,6 +8,7 @@ import com.unciv.logic.city.City
 import com.unciv.logic.civilization.Civilization
 import com.unciv.logic.files.UncivFiles
 import com.unciv.models.Spy
+import com.unciv.models.SpyAction
 import com.unciv.models.metadata.BaseRuleset
 import com.unciv.models.metadata.GameSettings
 import com.unciv.models.ruleset.RulesetCache
@@ -86,6 +87,23 @@ internal object ChatEspionageActions {
                     civ.espionageManager.dismissedShouldMoveSpies = true
                     SpyOutcome(true, "Explicitly left ${civ.espionageManager.getIdleSpies().size} spy/spies idle for this turn")
                 }
+                "coup" -> {
+                    val parts = actionId.split(":", limit = 3)
+                    val spy = parts.getOrNull(1)?.toIntOrNull()?.let { civ.espionageManager.spyList.getOrNull(it) }
+                        ?: return@runCatching SpyOutcome(false, "Rejected: spy no longer exists")
+                    if (!spy.canDoCoup()) return@runCatching SpyOutcome(false, "Rejected: coup is no longer legal")
+                    val chance = (spy.getCoupChanceOfSuccess(false) * 100f).toInt()
+                    spy.setAction(SpyAction.Coup, 1)
+                    SpyOutcome(true, "Ordered ${spy.name} to stage a coup in ${spy.getCity().civ.civName}; visible success chance=$chance%; resolves at end turn")
+                }
+                "cancelCoup" -> {
+                    val parts = actionId.split(":", limit = 3)
+                    val spy = parts.getOrNull(1)?.toIntOrNull()?.let { civ.espionageManager.spyList.getOrNull(it) }
+                        ?: return@runCatching SpyOutcome(false, "Rejected: spy no longer exists")
+                    if (spy.action != SpyAction.Coup) return@runCatching SpyOutcome(false, "Rejected: spy is not preparing a coup")
+                    spy.setAction(SpyAction.CounterIntelligence, 10)
+                    SpyOutcome(true, "Cancelled ${spy.name}'s coup order")
+                }
                 else -> SpyOutcome(false, "Rejected: unsupported espionage category")
             }
         }.fold(
@@ -104,6 +122,12 @@ internal object ChatEspionageActions {
                 add(LegalSpyAction("spy:$index:move:${city.id}", "assign", "Move ${spy.name} to ${city.name} (${city.civ.civName})"))
             }
             if (spy.getCityOrNull() != null) add(LegalSpyAction("spy:$index:hideout", "hideout", "Recall ${spy.name} to the hideout"))
+            if (spy.action == SpyAction.Coup) {
+                add(LegalSpyAction("spy:$index:cancelCoup", "cancelCoup", "Cancel ${spy.name}'s pending coup"))
+            } else if (spy.canDoCoup()) {
+                val chance = (spy.getCoupChanceOfSuccess(false) * 100f).toInt()
+                add(LegalSpyAction("spy:$index:coup", "coup", "Stage a coup in ${spy.getCity().civ.civName} with ${spy.name} ($chance% visible chance)"))
+            }
         }
         if (manager.shouldShowMoveSpies()) add(LegalSpyAction("spy:dismiss", "dismiss", "Leave all remaining idle spies in the hideout this turn"))
     }
