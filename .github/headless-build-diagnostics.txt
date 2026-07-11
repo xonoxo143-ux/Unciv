@@ -83,6 +83,7 @@ headless_build_exit_code=1
 753:w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscreen/worldmap/WorldMapTileUpdater.kt:165:53 'fun getTilesInDistanceRange(range: IntRange): Sequence<Tile>' is deprecated. forEachTileInDistanceRange is faster. If not viable, then this can still be used.
 754:w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscreen/worldmap/WorldMapTileUpdater.kt:209:36 'fun getTilesInDistance(distance: Int): Sequence<Tile>' is deprecated. forEachTileInDistance is faster. If not viable, then this can still be used.
 755:w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/ui/screens/worldscreen/worldmap/WorldMapTileUpdater.kt:251:43 'fun getCities(): Sequence<City>' is deprecated. forEachCity is faster. If not viable, then this can still be used.
+761:> Task :desktop:compileKotlin FAILED
 762:e: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatWorkerActions.kt:69:14 Cannot infer type for type parameter 'R'. Specify it explicitly.
 763:e: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatWorkerActions.kt:69:20 Unresolved reference 'unescapeWorkerJson'.
 764:e: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatWorkerActions.kt:70:14 Cannot infer type for type parameter 'T'. Specify it explicitly.
@@ -109,18 +110,17 @@ headless_build_exit_code=1
 785:e: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatWorkerActions.kt:247:8 Syntax error: Expecting '}'.
 786:e: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatWorkerActions.kt:247:13 Anonymous functions with names are prohibited.
 787:e: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatWorkerActions.kt:250:27 Syntax error: Expecting '}'.
-789:> Task :desktop:compileKotlin FAILED
-792:FAILURE: Build failed with an exception.
-795:Execution failed for task ':desktop:compileKotlin'.
-797:   > Compilation error. See log for more details
-804:* Exception is:
-805:org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':desktop:compileKotlin'.
-814:	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
-837:Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-943:	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
-966:Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
-967:	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:21)
-999:BUILD FAILED in 2m 30s
+790:FAILURE: Build failed with an exception.
+793:Execution failed for task ':desktop:compileKotlin'.
+795:   > Compilation error. See log for more details
+802:* Exception is:
+803:org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':desktop:compileKotlin'.
+812:	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+835:Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+941:	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+964:Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+965:	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:21)
+997:BUILD FAILED in 3m 24s
 
 == Last 180 build lines ==
 	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
@@ -301,5 +301,5 @@ Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilat
 	... 2 more
 
 
-BUILD FAILED in 2m 30s
+BUILD FAILED in 3m 24s
 6 actionable tasks: 6 executed
