@@ -51,6 +51,7 @@ internal object ChatAdvancedActions {
         saveFile.writeText(UncivFiles.gameInfoToString(gameInfo, forceZip = false, updateChecksum = false))
         writeOutputs(config, gameInfo, results)
         println("Advanced chat actions complete: actions=${results.size} applied=${results.count { it.applied }} rejected=${results.count { !it.applied }}")
+        exitProcess(0)
     }
 
     private fun initializeUnciv() {
