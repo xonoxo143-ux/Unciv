@@ -1,13 +1,13 @@
 {
   "repository": "xonoxo143-ux/Unciv",
   "branch": "headless-measurement-harness",
-  "sha": "b598f873c22d38c6fdbfa5595dee82567e7ed11a",
+  "sha": "88dd6509441087285a829bf74365e9fb7cbda7f8",
   "workflow": "Build Headless Chat Pack",
-  "run_id": 29130923131,
-  "run_number": 36,
+  "run_id": 29155855657,
+  "run_number": 44,
   "run_attempt": 1,
-  "build_exit_code": 0,
-  "run_url": "https://github.com/xonoxo143-ux/Unciv/actions/runs/29130923131",
+  "build_exit_code": 1,
+  "run_url": "https://github.com/xonoxo143-ux/Unciv/actions/runs/29155855657",
   "artifact_name": "UncivHeadlessChatPack",
   "artifact_path": "build/chat-headless/UncivHeadlessChatPack.zip",
   "diagnostics_path": ".github/headless-build-diagnostics.txt"
