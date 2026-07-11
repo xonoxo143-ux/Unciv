@@ -120,7 +120,7 @@ headless_build_exit_code=0
 780:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatTradeProposalActions.kt:98:28 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
 781:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatUnitUtilityActions.kt:105:33 'fun getMatchingUniques(uniqueType: UniqueType, gameContext: GameContext = ..., checkCivInfoUniques: Boolean = ...): Sequence<Unique>' is deprecated. forEachMatchingUnique is faster. If not viable, then this can still be used.
 782:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatUnitUtilityActions.kt:142:44 'fun getMatchingUniques(uniqueType: UniqueType, gameContext: GameContext = ..., checkCivInfoUniques: Boolean = ...): Sequence<Unique>' is deprecated. forEachMatchingUnique is faster. If not viable, then this can still be used.
-783:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatVisibleStateExporter.kt:76:29 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
+783:w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatVisibleStateExporter.kt:77:29 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
 
 == Last 180 build lines ==
 w: file:///home/runner/work/Unciv/Unciv/core/src/com/unciv/models/ruleset/tile/TileImprovement.kt:134:29 'fun getMatchingUniques(uniqueType: UniqueType, state: GameContext = ...): Sequence<Unique>' is deprecated. forEachMatchingUnique is faster. If not viable, then this can still be used.
@@ -293,13 +293,13 @@ w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatRe
 w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatTradeProposalActions.kt:98:28 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
 w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatUnitUtilityActions.kt:105:33 'fun getMatchingUniques(uniqueType: UniqueType, gameContext: GameContext = ..., checkCivInfoUniques: Boolean = ...): Sequence<Unique>' is deprecated. forEachMatchingUnique is faster. If not viable, then this can still be used.
 w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatUnitUtilityActions.kt:142:44 'fun getMatchingUniques(uniqueType: UniqueType, gameContext: GameContext = ..., checkCivInfoUniques: Boolean = ...): Sequence<Unique>' is deprecated. forEachMatchingUnique is faster. If not viable, then this can still be used.
-w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatVisibleStateExporter.kt:76:29 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
+w: file:///home/runner/work/Unciv/Unciv/desktop/src/com/unciv/app/desktop/ChatVisibleStateExporter.kt:77:29 'fun getKnownCivs(): Sequence<Civilization>' is deprecated. forEachKnownCiv is faster. If not viable, then this can still be used.
 
 > Task :desktop:compileJava NO-SOURCE
 > Task :desktop:classes UP-TO-DATE
 > Task :desktop:headlessDist
 > Task :desktop:chatHeadlessPack
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1783783609529.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1783801838733.json
 
-BUILD SUCCESSFUL in 3m 27s
+BUILD SUCCESSFUL in 3m 35s
 8 actionable tasks: 8 executed
