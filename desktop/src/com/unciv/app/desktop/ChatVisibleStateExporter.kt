@@ -47,6 +47,7 @@ internal object ChatVisibleStateExporter {
         File(outputDir, "blocking-choices.json").writeText(blockingChoicesJson(gameInfo, blockers))
         File(outputDir, "visible-state-v2.md").writeText(visibleStateMarkdown(gameInfo, blockers, config))
         println("Visible state export complete: turn=${gameInfo.turns} player=${gameInfo.currentPlayer} blockers=${blockers.size} output=${outputDir.path}")
+        exitProcess(0)
     }
 
     private fun initializeUnciv() {
