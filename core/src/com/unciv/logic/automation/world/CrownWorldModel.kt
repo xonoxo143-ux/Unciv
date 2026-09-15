@@ -110,8 +110,9 @@ class CrownWorldModel {
             val weakness = ((equalShare - realm.powerShare) / max(equalShare, 0.01)).coerceAtLeast(0.0)
 
             // Positive pressure means "support this realm". Negative means
-            // "restrain this realm". Distress can override simple weakness.
-            val support = realm.distress * 0.75 + weakness * 0.25
+            // "restrain this realm". Severe weakness alone must be enough to
+            // trigger support before the realm is already economically dying.
+            val support = realm.distress * 0.65 + weakness * 0.35
             val restrain = dominance * 0.65 + realm.powerTrend.coerceAtLeast(0.0) * 4.0 * 0.35
             val pressure = (support - restrain).coerceIn(-1.0, 1.0)
             val stance = when {
