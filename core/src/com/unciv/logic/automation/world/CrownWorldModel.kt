@@ -41,6 +41,13 @@ class CrownWorldModel {
         val totals = WorldTotals.from(raw)
         val equalShare = 1.0 / raw.size
 
+        val activePowerWeight =
+            if (totals.population > 0.0) 0.22 else 0.0
+                + if (totals.units > 0.0) 0.25 else 0.0
+                + if (totals.techs > 0.0) 0.17 else 0.0
+                + if (totals.production > 0.0) 0.18 else 0.0
+                + if (totals.science > 0.0) 0.18 else 0.0
+
         val preliminary = raw.map { snapshot ->
             val populationShare = share(snapshot.population.toDouble(), totals.population)
             val unitShare = share(snapshot.units.toDouble(), totals.units)
@@ -48,14 +55,16 @@ class CrownWorldModel {
             val productionShare = share(snapshot.production, totals.production)
             val scienceShare = share(snapshot.science, totals.science)
 
-            // This is a deliberately transparent proxy, not a learned score.
-            // We can later replace or rerank this with measured outcome data.
-            val powerShare =
-                populationShare * 0.22 +
-                unitShare * 0.25 +
-                techShare * 0.17 +
-                productionShare * 0.18 +
-                scienceShare * 0.18
+            // Transparent proxy, not a learned score. Metrics that do not yet
+            // exist in the world are excluded from the denominator so four
+            // identical starting realms correctly evaluate to 25% each.
+            val weightedPower =
+                populationShare * if (totals.population > 0.0) 0.22 else 0.0 +
+                unitShare * if (totals.units > 0.0) 0.25 else 0.0 +
+                techShare * if (totals.techs > 0.0) 0.17 else 0.0 +
+                productionShare * if (totals.production > 0.0) 0.18 else 0.0 +
+                scienceShare * if (totals.science > 0.0) 0.18 else 0.0
+            val powerShare = if (activePowerWeight <= 0.0) equalShare else weightedPower / activePowerWeight
 
             val distress = distress(snapshot)
             val previous = previousPowerShares[snapshot.civID] ?: powerShare
