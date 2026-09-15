@@ -41,12 +41,12 @@ class CrownWorldModel {
         val totals = WorldTotals.from(raw)
         val equalShare = 1.0 / raw.size
 
-        val activePowerWeight =
-            if (totals.population > 0.0) 0.22 else 0.0
-                + if (totals.units > 0.0) 0.25 else 0.0
-                + if (totals.techs > 0.0) 0.17 else 0.0
-                + if (totals.production > 0.0) 0.18 else 0.0
-                + if (totals.science > 0.0) 0.18 else 0.0
+        val populationWeight = activeWeight(totals.population, 0.22)
+        val unitWeight = activeWeight(totals.units, 0.25)
+        val techWeight = activeWeight(totals.techs, 0.17)
+        val productionWeight = activeWeight(totals.production, 0.18)
+        val scienceWeight = activeWeight(totals.science, 0.18)
+        val activePowerWeight = populationWeight + unitWeight + techWeight + productionWeight + scienceWeight
 
         val preliminary = raw.map { snapshot ->
             val populationShare = share(snapshot.population.toDouble(), totals.population)
@@ -59,11 +59,11 @@ class CrownWorldModel {
             // exist in the world are excluded from the denominator so four
             // identical starting realms correctly evaluate to 25% each.
             val weightedPower =
-                populationShare * if (totals.population > 0.0) 0.22 else 0.0 +
-                unitShare * if (totals.units > 0.0) 0.25 else 0.0 +
-                techShare * if (totals.techs > 0.0) 0.17 else 0.0 +
-                productionShare * if (totals.production > 0.0) 0.18 else 0.0 +
-                scienceShare * if (totals.science > 0.0) 0.18 else 0.0
+                populationShare * populationWeight +
+                unitShare * unitWeight +
+                techShare * techWeight +
+                productionShare * productionWeight +
+                scienceShare * scienceWeight
             val powerShare = if (activePowerWeight <= 0.0) equalShare else weightedPower / activePowerWeight
 
             val distress = distress(snapshot)
@@ -184,6 +184,9 @@ class CrownWorldModel {
         }
         return pairs.size
     }
+
+    private fun activeWeight(total: Double, configuredWeight: Double): Double =
+        if (total > 0.0) configuredWeight else 0.0
 
     private fun share(value: Double, total: Double): Double =
         if (total <= 0.0) 0.0 else (value / total).coerceIn(0.0, 1.0)
