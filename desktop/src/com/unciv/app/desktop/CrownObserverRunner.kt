@@ -20,6 +20,7 @@ import com.unciv.models.skins.SkinCache
 import com.unciv.models.tilesets.TileSetCache
 import com.unciv.utils.Log
 import java.io.File
+import kotlin.system.exitProcess
 
 /**
  * Small executable testbed for the Unking "Crown" idea.
@@ -85,6 +86,7 @@ internal object CrownObserverRunner {
         })
 
         println("Crown observer complete -> ${observations.absolutePath}")
+        exitProcess(0)
     }
 
     private fun initializeUnciv() {
