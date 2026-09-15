@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - headless-measurement-harness
+      - unking-world-ai
     paths-ignore:
       - '.github/headless-latest-run.json'
       - '.github/headless-build-diagnostics.txt'
