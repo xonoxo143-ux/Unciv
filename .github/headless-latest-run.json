@@ -1,13 +1,13 @@
 {
   "repository": "xonoxo143-ux/Unciv",
   "branch": "unking-world-ai",
-  "sha": "f38f88d5c7d056b4874e8557ca43d215df7e5e24",
+  "sha": "d2b2f03116eb5809b0b44db26a31db25963b7109",
   "workflow": "Build Headless Chat Pack",
-  "run_id": 35009638906,
-  "run_number": 74,
+  "run_id": 35010145918,
+  "run_number": 75,
   "run_attempt": 1,
   "build_exit_code": 0,
-  "run_url": "https://github.com/xonoxo143-ux/Unciv/actions/runs/35009638906",
+  "run_url": "https://github.com/xonoxo143-ux/Unciv/actions/runs/35010145918",
   "artifact_name": "UncivHeadlessChatPack",
   "artifact_path": "build/chat-headless/UncivHeadlessChatPack.zip",
   "diagnostics_path": ".github/headless-build-diagnostics.txt"
