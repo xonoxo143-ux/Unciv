@@ -108,12 +108,14 @@ class CrownWorldModel {
         val realms = preliminary.map { realm ->
             val dominance = ((realm.powerShare - equalShare) / max(equalShare, 0.01)).coerceAtLeast(0.0)
             val weakness = ((equalShare - realm.powerShare) / max(equalShare, 0.01)).coerceAtLeast(0.0)
+            val risingFast = realm.powerTrend.coerceAtLeast(0.0) * 4.0
+            val fallingFast = (-realm.powerTrend).coerceAtLeast(0.0) * 4.0
 
             // Positive pressure means "support this realm". Negative means
-            // "restrain this realm". Severe weakness alone must be enough to
-            // trigger support before the realm is already economically dying.
-            val support = realm.distress * 0.65 + weakness * 0.35
-            val restrain = dominance * 0.65 + realm.powerTrend.coerceAtLeast(0.0) * 4.0 * 0.35
+            // "restrain this realm". The Crown reacts not only to present
+            // weakness/dominance, but to the direction the realm is moving.
+            val support = realm.distress * 0.55 + weakness * 0.30 + fallingFast * 0.15
+            val restrain = dominance * 0.65 + risingFast * 0.35
             val pressure = (support - restrain).coerceIn(-1.0, 1.0)
             val stance = when {
                 pressure >= 0.20 -> CrownStance.Support
